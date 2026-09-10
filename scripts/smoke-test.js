@@ -3,6 +3,7 @@
  *
  *   npm test                 (lance son propre serveur sur un port de test)
  *   SMOKE_URL=https://jeu.samuel-josephmyrtil.fr npm test   (teste un serveur déjà en ligne)
+ *   SMOKE_SCENARIO=2 npm test                              (ne joue que le scénario 2)
  *
  * Scénario 1 : partie complète de 2 manches (2 anecdotes par joueur) + manche
  * bonus. Au début de la manche 2, un joueur quitte : la partie continue sans lui.
@@ -28,6 +29,17 @@ const fail = (msg) => {
   serverProcess?.kill();
   process.exit(1);
 };
+
+/** Attend une promesse au plus `ms` millisecondes (le minuteur est bien annulé ensuite). */
+async function within(promise, what, ms = 3000) {
+  let timer;
+  const timedOut = Symbol('timeout');
+  const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(timedOut), ms); });
+  const result = await Promise.race([promise, timeout]);
+  clearTimeout(timer);
+  if (result === timedOut) fail(`attente dépassée : ${what}`);
+  return result;
+}
 
 async function waitFor(condition, what, ms = 5000) {
   const start = Date.now();
@@ -241,8 +253,8 @@ async function featuresScenario() {
   // ---- Réactions : diffusées à tous, écran partagé compris
   const received = new Promise((r) => tv.socket.once('room:reaction', r));
   await chloe.emit('game:action', { type: 'react', payload: { emoji: '😂' } });
-  const reaction = await Promise.race([received, wait(2000).then(() => null)]);
-  if (reaction?.emoji !== '😂') fail("réaction non reçue par l'écran partagé");
+  const reaction = await within(received, "réaction reçue par l'écran partagé");
+  if (reaction?.emoji !== '😂') fail("mauvaise réaction reçue par l'écran partagé");
 
   // ---- Arrivée en cours de partie, puis exclusion par le host
   const dan = makeBot('Dan');
@@ -251,7 +263,7 @@ async function featuresScenario() {
   const kicked = new Promise((r) => dan.socket.once('room:kicked', r));
   const kick = await host.emit('room:kick', { playerId: dan.id });
   if (!kick.ok) fail(`exclusion : ${kick.error}`);
-  await Promise.race([kicked, wait(2000).then(() => fail('exclusion non reçue par Dan'))]);
+  await within(kicked, 'exclusion reçue par Dan');
   if (host.state.players.some((p) => p.name === 'Dan')) fail('Dan aurait dû être retiré');
 
   // ---- On termine la partie pour vérifier les récompenses
@@ -287,10 +299,17 @@ async function main() {
   log(`serveur testé : ${URL}`);
   const timer = setTimeout(() => fail('délai dépassé'), TIMEOUT_MS);
 
-  log('--- Scénario 1 : partie complète');
-  await classicScenario();
-  log('--- Scénario 2 : reconnexion, écran partagé, host, réactions, anti-abus');
-  await featuresScenario();
+  // SMOKE_SCENARIO=1 ou 2 pour n'en jouer qu'un : utile en ligne, où chaque
+  // scénario crée une partie (5 créations max par adresse IP toutes les 10 min)
+  const only = process.env.SMOKE_SCENARIO;
+  if (!only || only === '1') {
+    log('--- Scénario 1 : partie complète');
+    await classicScenario();
+  }
+  if (!only || only === '2') {
+    log('--- Scénario 2 : reconnexion, écran partagé, host, réactions, anti-abus');
+    await featuresScenario();
+  }
 
   clearTimeout(timer);
   bots.forEach((b) => b.socket.disconnect());
