@@ -33,6 +33,18 @@ function eligibleVoters(room) {
   return [...room.players.keys()].filter((id) => id !== authorId);
 }
 
+/** Joueurs qui ont envoyé toutes leurs anecdotes de la manche. */
+function doneWriters(room) {
+  const perPlayer = room.settings.anecdotesPerPlayer;
+  return [...room.game.submissions]
+    .filter(([, texts]) => texts.length >= perPlayer)
+    .map(([playerId]) => playerId);
+}
+
+function allSubmitted(room) {
+  return doneWriters(room).length >= room.players.size;
+}
+
 /** Anecdotes proposées à la manche bonus (celles dont l'auteur est encore là). */
 function craziestCandidates(room) {
   return room.game.anecdotes.filter((a) => room.getPlayer(a.authorId));
@@ -52,7 +64,7 @@ function start(room) {
     deadline: null,
     round: 0,
     totalRounds: room.settings.rounds,
-    submissions: new Map(), // manche en cours : playerId -> texte
+    submissions: new Map(), // manche en cours : playerId -> [textes]
     anecdotes: [], // toutes les anecdotes de la partie (pour la manche bonus)
     queue: [], // anecdotes restant à jouer dans la manche
     roundIndex: 0, // numéro de l'anecdote en cours dans la manche
@@ -70,14 +82,21 @@ function startRound(room) {
   const game = room.game;
   game.round += 1;
   game.submissions = new Map();
-  setPhase(room, 'submit', room.settings.submitTime, () => endSubmit(room));
+  // Le temps est réglé par anecdote : 3 anecdotes à écrire = 3 fois plus de temps
+  const { submitTime, anecdotesPerPlayer } = room.settings;
+  setPhase(room, 'submit', submitTime * anecdotesPerPlayer, () => endSubmit(room));
   room.broadcast();
 }
 
+/** Les anecdotes arrivent une par une, jusqu'au nombre réglé dans le lobby. */
 function submitAnecdote(room, playerId, payload) {
   const game = room.game;
   if (game.phase !== 'submit') return "Ce n'est pas le moment d'écrire.";
-  if (game.submissions.has(playerId)) return 'Tu as déjà envoyé ton anecdote.';
+  const perPlayer = room.settings.anecdotesPerPlayer;
+  const mine = game.submissions.get(playerId) ?? [];
+  if (mine.length >= perPlayer) {
+    return perPlayer > 1 ? 'Tu as déjà envoyé toutes tes anecdotes.' : 'Tu as déjà envoyé ton anecdote.';
+  }
 
   const text = String(payload?.text ?? '').replace(/\s+/g, ' ').trim();
   if (text.length < RULES.ANECDOTE_MIN_LENGTH) {
@@ -87,8 +106,12 @@ function submitAnecdote(room, playerId, payload) {
     return `Ton anecdote ne doit pas dépasser ${RULES.ANECDOTE_MAX_LENGTH} caractères.`;
   }
 
-  game.submissions.set(playerId, text);
-  if (game.submissions.size >= room.players.size) endSubmit(room);
+  if (mine.some((t) => t.toLowerCase() === text.toLowerCase())) {
+    return 'Tu as déjà envoyé cette anecdote.';
+  }
+
+  game.submissions.set(playerId, [...mine, text]);
+  if (allSubmitted(room)) endSubmit(room);
   else room.broadcast();
 }
 
@@ -97,10 +120,13 @@ function endSubmit(room) {
   if (game.phase !== 'submit') return;
 
   const fresh = [];
-  for (const [authorId, text] of game.submissions) {
+  // À la fin du timer, les anecdotes déjà envoyées sont jouées même si le compte n'y est pas
+  for (const [authorId, texts] of game.submissions) {
     const author = room.getPlayer(authorId);
     if (!author) continue;
-    fresh.push({ id: randomUUID(), authorId, authorName: author.name, text, round: game.round });
+    for (const text of texts) {
+      fresh.push({ id: randomUUID(), authorId, authorName: author.name, text, round: game.round });
+    }
   }
   game.anecdotes.push(...fresh);
   game.queue = shuffle(fresh);
@@ -323,7 +349,7 @@ function onPlayerLeave(room, playerId, player) {
   switch (game.phase) {
     case 'submit':
       game.submissions.delete(playerId);
-      if (game.submissions.size >= room.players.size) return endSubmit(room);
+      if (allSubmitted(room)) return endSubmit(room);
       break;
 
     case 'debate':
@@ -370,15 +396,20 @@ function getView(room, playerId) {
   };
 
   switch (game.phase) {
-    case 'submit':
+    case 'submit': {
+      const perPlayer = room.settings.anecdotesPerPlayer;
+      const submittedCount = game.submissions.get(playerId)?.length ?? 0;
       return {
         ...base,
-        hasSubmitted: game.submissions.has(playerId),
-        doneIds: [...game.submissions.keys()],
+        perPlayer,
+        submittedCount,
+        hasSubmitted: submittedCount >= perPlayer,
+        doneIds: doneWriters(room),
         expected: room.players.size,
         minLength: RULES.ANECDOTE_MIN_LENGTH,
         maxLength: RULES.ANECDOTE_MAX_LENGTH,
       };
+    }
 
     case 'debate':
     case 'vote': {

@@ -63,7 +63,7 @@ async function main() {
 
   const denied = await bob.emit('room:updateSettings', { patch: { rounds: 1 } });
   if (!denied.error) fail("un non-host ne devrait pas modifier les réglages");
-  await alice.emit('room:updateSettings', { patch: { rounds: 2, voteTime: 999, hack: true } });
+  await alice.emit('room:updateSettings', { patch: { rounds: 2, anecdotesPerPlayer: 2, voteTime: 999, hack: true } });
   const settings = alice.state.settings;
   if (settings.voteTime !== alice.state.settingsSchema.voteTime.max || settings.hack) {
     fail(`réglages mal validés : ${JSON.stringify(settings)}`);
@@ -89,10 +89,16 @@ async function main() {
             log('Chloé se déconnecte pendant la manche 2');
             return bot.socket.disconnect();
           }
-          return bot.emit('game:action', { type: 'submit', payload: { text: `Anecdote de ${bot.name}, manche ${g.round}, plutôt folle` } });
+          // Chaque joueur envoie ses anecdotes une par une (2 par manche dans ce test)
+          for (let k = 1; k <= g.perPlayer; k++) {
+            const r = await bot.emit('game:action', { type: 'submit', payload: { text: `Anecdote ${k} de ${bot.name}, manche ${g.round}, plutôt folle` } });
+            if (r.error) fail(`envoi ${bot.name} : ${r.error}`);
+          }
+          return;
 
         case 'debate':
           if (!g.text) fail("l'anecdote doit être affichée en entier pendant le débat");
+          if (g.round === 1 && g.count !== 6) fail(`manche 1 : 6 anecdotes attendues (3 joueurs x 2), reçu ${g.count}`);
           if ('authorId' in g) fail("l'auteur ne doit pas être envoyé pendant le débat");
           // Le host écourte le débat ; les votes envoyés avant doivent être refusés
           if (bot === alice) {

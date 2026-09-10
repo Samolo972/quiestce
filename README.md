@@ -25,13 +25,15 @@ interfaces), `MIN_PLAYERS` (défaut 3).
 ## Déroulé d'une partie
 
 1. **Lobby** : les joueurs rejoignent avec un code à 4 caractères ; le host règle la partie.
-2. **Écriture** : chacun écrit une anecdote sur lui, anonymement.
+2. **Écriture** : chacun écrit une ou plusieurs anecdotes sur lui (nombre choisi
+   par le host), une à la fois, anonymement.
 3. Pour chaque anecdote, dans un ordre aléatoire :
    - **Débat** : l'anecdote s'affiche en entier chez tout le monde, on en discute
      pendant le temps choisi par le host (qui peut aussi passer au vote plus tôt) ;
    - **Vote** : chacun désigne l'auteur supposé (sauf l'auteur lui-même) ;
    - **Révélation** : une fois tous les votes reçus, on découvre l'auteur et qui a voté pour qui.
-4. Autant de manches que réglé (1 manche = 1 anecdote par joueur).
+4. Autant de manches que réglé : chaque manche recommence par l'écriture.
+   Exemple : 1 manche avec 3 anecdotes par joueur.
 5. **Manche bonus** (optionnelle) : vote pour l'anecdote la plus folle de la partie,
    avec dépouillement en direct.
 6. **Podium** final.
@@ -40,7 +42,8 @@ interfaces), `MIN_PLAYERS` (défaut 3).
 
 | Réglage | Plage | Défaut |
 |---|---|---|
-| Temps pour écrire son anecdote | 30 s – 2 min | 1 min |
+| Anecdotes à écrire par joueur | 1 – 5 | 1 |
+| Temps d'écriture par anecdote (multiplié par le nombre d'anecdotes) | 30 s – 2 min | 1 min |
 | Temps de débat par anecdote | 30 s – 5 min | 1 min 30 |
 | Temps de vote après le débat | 15 – 60 s | 30 s |
 | Nombre de manches | 1 – 5 | 2 |

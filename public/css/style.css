@@ -312,6 +312,12 @@ body.show-scores #scoreboard { transform: none; }
   text-align: center;
 }
 
+/* Progression de l'écriture quand chacun a plusieurs anecdotes à écrire */
+#write-zone .row h2 { margin: 0; }
+.dots { display: flex; flex: none; gap: 0.35rem; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; background: var(--mist-strong); }
+.dots i.on { background: var(--ok); }
+
 /* --------------------------------------------------------- Champs */
 
 .field { display: grid; gap: 0.35rem; margin-bottom: 1rem; font-weight: 700; }

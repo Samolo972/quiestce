@@ -4,8 +4,13 @@
  * ici suffit pour qu'il apparaisse (il reste à l'utiliser dans la logique).
  */
 const SETTINGS_SCHEMA = {
+  anecdotesPerPlayer: {
+    type: 'number', label: 'Anecdotes à écrire par joueur', unit: '',
+    help: 'Écrites à la suite en début de manche, puis débattues une par une',
+    min: 1, max: 5, step: 1, default: 1,
+  },
   submitTime: {
-    type: 'number', label: 'Temps pour écrire son anecdote', unit: 's',
+    type: 'number', label: "Temps d'écriture par anecdote", unit: 's',
     min: 30, max: 120, step: 5, default: 60,
   },
   debateTime: {
@@ -19,7 +24,7 @@ const SETTINGS_SCHEMA = {
   },
   rounds: {
     type: 'number', label: 'Nombre de manches', unit: '',
-    help: '1 manche = 1 anecdote par joueur',
+    help: 'Chaque manche recommence par l\'écriture des anecdotes',
     min: 1, max: 5, step: 1, default: 2,
   },
   undetectableBonus: {
