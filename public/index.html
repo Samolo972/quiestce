@@ -12,19 +12,28 @@
 <body>
   <!-- Barre du haut : visible uniquement dans une room -->
   <header id="topbar" hidden>
-    <div class="code-pill">Code <b id="topbar-code"></b></div>
+    <div class="code-pill"><span class="code-label">Code</span> <b id="topbar-code"></b></div>
     <div class="topbar-round" id="topbar-round"></div>
     <div class="topbar-actions">
+      <button type="button" class="btn btn-flat icon" id="mute" aria-label="Couper le son">🔊</button>
       <button type="button" class="btn btn-flat" id="toggle-scores">Scores</button>
       <button type="button" class="btn btn-flat" id="leave">Quitter</button>
     </div>
+    <!-- Contrôles du host pendant la partie (+30 s, pause) : deuxième ligne de la barre -->
+    <div id="host-bar" hidden></div>
   </header>
+
+  <!-- Affiché pendant une coupure réseau, le temps que la reconnexion se fasse -->
+  <div id="connection" class="connection-banner" role="status" hidden>Connexion perdue… reconnexion en cours</div>
 
   <div id="layout">
     <main id="screen"></main>
     <!-- Tableau des scores : sidebar sur grand écran, panneau déroulant sur mobile -->
     <aside id="scoreboard" hidden></aside>
   </div>
+
+  <!-- Réactions emoji qui s'envolent -->
+  <div id="reactions" aria-hidden="true"></div>
 
   <div id="toasts" aria-live="polite"></div>
 

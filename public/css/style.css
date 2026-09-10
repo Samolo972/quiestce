@@ -92,13 +92,14 @@ small { font-size: 0.85rem; }
 
 #screen { display: grid; gap: 1.1rem; max-width: 640px; margin: 0 auto; width: 100%; }
 
+/* Grille : code | où en est la partie | boutons ; la barre du host prend toute la 2e ligne */
 #topbar {
   position: sticky;
   top: 0;
   z-index: 20;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
   background: var(--plateau-deep);
@@ -116,7 +117,7 @@ small { font-size: 0.85rem; }
 }
 .code-pill b { color: var(--plateau); font-size: 1.05rem; font-weight: 800; letter-spacing: 0.08em; }
 .topbar-round {
-  flex: 1;
+  flex: 1 1 0; /* base nulle : ne force jamais le retour à la ligne de la barre */
   min-width: 0;
   overflow: hidden;
   color: var(--mist-strong);
@@ -129,6 +130,13 @@ small { font-size: 0.85rem; }
 .topbar-actions { display: flex; gap: 0.4rem; }
 /* Sur petit écran, l'en-tête de chaque phase suffit à se repérer */
 @media (max-width: 480px) { .topbar-round { visibility: hidden; } }
+@media (max-width: 420px) {
+  #topbar { gap: 0.35rem; padding-inline: 0.75rem; }
+  .code-label { display: none; }
+  .topbar-actions { gap: 0.3rem; }
+  .topbar-actions .btn-flat { padding-inline: 0.65rem; }
+  .topbar-actions .btn-flat.icon { width: 36px; padding: 0; }
+}
 
 /* Scores : panneau qui glisse depuis le bas sur mobile */
 #scoreboard {
@@ -190,6 +198,9 @@ body.show-scores #scoreboard { transform: none; }
   box-shadow: none;
 }
 .btn-flat:active:not(:disabled) { transform: none; box-shadow: none; background: rgb(255 255 255 / 0.24); }
+.btn-soft { --btn: var(--mist); --btn-dark: var(--mist-strong); --btn-on: var(--plateau); }
+.btn-small { min-height: 40px; padding: 0.4rem 0.9rem; font-size: 0.95rem; }
+.btn-flat.icon { width: 40px; padding: 0; font-size: 1.1rem; }
 .btn.block { width: 100%; }
 .btn.big { min-height: 62px; font-size: 1.3rem; }
 
@@ -373,6 +384,10 @@ textarea { resize: vertical; margin: 0.4rem 0 0.6rem; }
 /* ------------------------------------------------------------ Lobby */
 
 .pin-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 1rem;
   padding: 1.1rem 1.2rem 1.4rem;
   border-radius: var(--radius-m);
   background: var(--paper);
@@ -380,6 +395,14 @@ textarea { resize: vertical; margin: 0.4rem 0 0.6rem; }
   text-align: center;
   box-shadow: var(--drop);
 }
+.qr { display: block; width: 148px; height: 148px; border-radius: var(--radius-s); }
+@media (max-width: 480px) {
+  .pin-panel { grid-template-columns: 1fr; }
+  .qr { justify-self: center; width: 132px; height: 132px; }
+}
+/* Écran partagé : code et QR code en très grand */
+.pin-panel.big .room-code { font-size: clamp(4rem, 12vw, 7rem); }
+.pin-panel.big .qr { width: 240px; height: 240px; }
 .pin-panel p { margin: 0; font-weight: 700; }
 .room-code {
   margin: 0.1rem 0 0.9rem;
@@ -666,7 +689,106 @@ input[type="range"]::-moz-range-thumb {
 .toast.error { background: var(--ko); color: #fff; box-shadow: 0 5px 0 var(--ko-dark); }
 .toast.hide { opacity: 0; }
 
+/* ----------------------------------------- Connexion, host, réactions */
+
+.connection-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 60;
+  padding: 0.55rem 1rem;
+  background: var(--ko);
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 4px 0 var(--ko-dark);
+}
+.connection-banner[hidden] { display: none; }
+
+/* Contrôles du host : deuxième ligne de la barre du haut, sans rien recouvrir */
+#host-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+#host-bar[hidden] { display: none; }
+#host-bar .btn { min-width: 6rem; border-radius: 99px; white-space: nowrap; }
+
+/* En pause, le disque du timer affiche le symbole pause */
+body.paused .disc .timer:empty::before { content: "❚❚"; font-size: 1.1rem; letter-spacing: -0.1em; }
+
+.reaction-bar { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.45rem; }
+.react {
+  width: 50px;
+  height: 50px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.14);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.react:active { transform: scale(1.25); }
+
+#reactions { position: fixed; inset: 0; z-index: 40; overflow: hidden; pointer-events: none; }
+.floating-reaction {
+  position: absolute;
+  bottom: -3rem;
+  font-size: 2.4rem;
+  animation: float-up 2.5s ease-out forwards;
+}
+
+/* Joueurs hors ligne (en attente de reconnexion) et retrait par le host */
+.chip.offline, .score-list li.offline { opacity: 0.5; }
+.score-list .status { display: block; color: var(--ko); font-size: 0.75rem; font-weight: 700; }
+.kick {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  font: 800 0.95rem/1 var(--font);
+  cursor: pointer;
+}
+.kick:hover, .kick:focus-visible { background: var(--mist-strong); color: var(--ko); }
+
+/* Idées d'anecdotes et bouton d'envoi */
+.idea { margin: 0.3rem 0 0; padding: 0.5rem 0.75rem; border-radius: var(--radius-s); background: #fff3c4; font-weight: 700; }
+.idea[hidden] { display: none; }
+.send-btn { margin-top: 0.8rem; }
+
+/* Récompenses de fin de partie */
+.awards { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.7rem; }
+.awards[hidden] { display: none; }
+.award {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 1rem 0.8rem;
+  border-radius: var(--radius-m);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: center;
+  box-shadow: var(--drop);
+}
+.award-tokens { display: flex; gap: 0.3rem; margin-bottom: 0.2rem; }
+.award-tokens .token { --t: 2.4rem; }
+.award h3 { margin: 0; color: var(--plateau); font-size: 1.05rem; }
+.award p { margin: 0; font-weight: 700; }
+.award small { color: var(--ink-soft); }
+
+/* Écran partagé (télé, ordinateur) : tout est agrandi */
+html.spectator, html.spectator body { font-size: 20px; }
+@media (min-width: 1200px) {
+  html.spectator #screen { max-width: 880px; }
+}
+
 /* --------------------------------------------------------- Animations */
+
+@keyframes float-up { to { transform: translate(var(--drift), -85vh) scale(1.3); opacity: 0; } }
 
 @keyframes pop { 0% { transform: scale(0.5); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
 @keyframes drop { from { transform: translateY(-24px); opacity: 0; } }

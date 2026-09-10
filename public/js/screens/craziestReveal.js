@@ -2,7 +2,8 @@
  * Dépouillement de la manche bonus : les bulletins sont comptés un par un
  * (effet suspense), puis le gagnant est révélé.
  */
-import { esc, renderContinue, plural, tokenHtml, tokenClass, playerById } from '../ui.js';
+import { esc, renderContinue, plural, tokenHtml, tokenClass, playerById, reactionBar } from '../ui.js';
+import { play } from '../sound.js';
 
 let timers = [];
 const later = (fn, ms) => timers.push(setTimeout(fn, ms));
@@ -34,6 +35,7 @@ export default {
       </div>
 
       <div id="winner" hidden></div>
+      ${reactionBar(s)}
       <div id="continue"></div>`;
 
     const row = (id) => el.querySelector(`.tally-row[data-id="${id}"]`);
@@ -49,6 +51,7 @@ export default {
         r.classList.remove('bump');
         void r.offsetWidth; // relance l'animation CSS
         r.classList.add('bump');
+        play('ballot');
       }, 1000 + i * step);
     });
 
@@ -64,8 +67,8 @@ export default {
       el.querySelectorAll('.tally-row').forEach((r) => {
         r.classList.add(g.winnerIds.includes(r.dataset.id) ? 'won' : 'lost');
       });
-      const winners = g.candidates.filter((a) => g.winnerIds.includes(a.id));
       // L'anecdote gagnante est déjà mise en avant dans le décompte : on annonce juste son auteur
+      const winners = g.candidates.filter((a) => g.winnerIds.includes(a.id));
       const box = el.querySelector('#winner');
       box.hidden = false;
       box.innerHTML = winners.map((a) => `
@@ -74,6 +77,7 @@ export default {
           <span><span class="speaker-name">${esc(a.authorName)}</span> gagne ${plural(g.bonus, 'point')}</span>
         </div>`).join('');
       box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      play('win');
     }, endOfCount + 1800);
   },
 

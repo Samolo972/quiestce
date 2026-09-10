@@ -34,4 +34,15 @@ function roomCount() {
   return rooms.size;
 }
 
+// Filet de sécurité : une partie sans aucune activité depuis longtemps est supprimée
+setInterval(() => {
+  const now = Date.now();
+  for (const [code, room] of rooms) {
+    if (now - room.lastActivity > config.ROOM_IDLE_MS) {
+      room.emitAll('room:closed', 'Partie fermée après une longue inactivité.');
+      deleteRoom(code);
+    }
+  }
+}, 10 * 60_000).unref();
+
 module.exports = { createRoom, getRoom, deleteRoom, roomCount };

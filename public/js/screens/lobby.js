@@ -1,12 +1,13 @@
 /**
- * Lobby : joueurs connectés, réglages (modifiables par le host, en lecture
- * seule pour les autres) et lancement de la partie.
+ * Lobby : code et QR code d'invitation, joueurs connectés, réglages
+ * (modifiables par le host, en lecture seule pour les autres) et lancement.
  * Le formulaire des réglages est généré depuis state.settingsSchema.
+ * Sur un écran partagé, on met en avant le code et le QR code.
  */
 import { request } from '../net.js';
 import { esc, toast, checkResponse, plural, tokenHtml, tokenClass } from '../ui.js';
 
-const isHost = (s) => s.hostId === s.you;
+const isHost = (s) => Boolean(s.you) && s.hostId === s.you;
 let known = new Set(); // joueurs déjà affichés : seuls les nouveaux "sautent" à l'écran
 
 function formatValue(def, value) {
@@ -61,19 +62,26 @@ async function share(code) {
 }
 
 export default {
-  // Si le rôle de host change, on reconstruit l'écran (formulaire ou lecture seule)
-  key: (s) => (isHost(s) ? 'host' : 'guest'),
+  // Écran partagé, host ou invité : trois mises en page différentes
+  key: (s) => (!s.you ? 'screen' : isHost(s) ? 'host' : 'guest'),
 
   mount(el, s) {
     const host = isHost(s);
+    const spectator = !s.you;
     const schema = s.settingsSchema;
     known = new Set();
 
     el.innerHTML = `
-      <section class="pin-panel">
-        <p>Code de la partie</p>
-        <div class="room-code">${esc(s.code)}</div>
-        <button type="button" class="btn btn-ink" id="share">Inviter des joueurs</button>
+      <section class="pin-panel ${spectator ? 'big' : ''}">
+        <div>
+          <p>Code de la partie</p>
+          <div class="room-code">${esc(s.code)}</div>
+          ${spectator
+            ? `<p class="hint">Scannez le QR code, ou allez sur <b>${esc(location.host)}</b></p>`
+            : '<button type="button" class="btn btn-ink" id="share">Inviter des joueurs</button>'}
+        </div>
+        <img class="qr" src="/qr/${encodeURIComponent(s.code)}" width="148" height="148"
+             alt="QR code pour rejoindre la partie ${esc(s.code)}">
       </section>
 
       <section>
@@ -81,17 +89,18 @@ export default {
         <ul class="player-chips" id="players"></ul>
       </section>
 
-      <section class="panel">
-        <h2>Réglages</h2>
-        ${host ? '' : '<p class="hint">Choisis par le host.</p>'}
-        <div class="settings">
-          ${Object.entries(schema).map(([key, def]) => settingHtml(key, def, host)).join('')}
-        </div>
-      </section>
+      ${spectator ? '' : `
+        <section class="panel">
+          <h2>Réglages</h2>
+          ${host ? '' : '<p class="hint">Choisis par le host.</p>'}
+          <div class="settings">
+            ${Object.entries(schema).map(([key, def]) => settingHtml(key, def, host)).join('')}
+          </div>
+        </section>`}
 
       <div id="start-zone"></div>`;
 
-    el.querySelector('#share').addEventListener('click', () => share(s.code));
+    el.querySelector('#share')?.addEventListener('click', () => share(s.code));
 
     if (host) {
       const settings = el.querySelector('.settings');
@@ -124,7 +133,7 @@ export default {
       const isNew = !known.has(p.id);
       known.add(p.id);
       return `
-        <li class="chip ${tokenClass(p)} ${p.id === s.you ? 'me' : ''} ${isNew ? 'new' : ''}">
+        <li class="chip ${tokenClass(p)} ${p.id === s.you ? 'me' : ''} ${isNew ? 'new' : ''} ${p.connected === false ? 'offline' : ''}">
           ${tokenHtml(p)}
           <span>${esc(p.name)}</span>
           ${p.id === s.hostId ? '<small>host</small>' : ''}

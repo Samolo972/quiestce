@@ -2,7 +2,8 @@
  * Débat : l'anecdote s'affiche en entier, tout le monde discute pour deviner
  * qui l'a écrite. Le vote s'ouvre à la fin du timer (ou quand le host le décide).
  */
-import { renderContinue, phaseHeader, bubbleHtml, tokenHtml, mysteryToken, playerById } from '../ui.js';
+import { renderContinue, phaseHeader, bubbleHtml, tokenHtml, mysteryToken, playerById, reactionBar } from '../ui.js';
+import { play } from '../sound.js';
 
 export default {
   key: (s) => `${s.game.round}-${s.game.index}`,
@@ -16,7 +17,9 @@ export default {
         ${g.isAuthor ? tokenHtml(playerById(s, s.you)) : mysteryToken()}
         <span>${g.isAuthor ? "C'est la tienne. Brouille les pistes&nbsp;!" : 'Débattez&nbsp;: qui a pu vivre ça&nbsp;?'}</span>
       </div>
+      ${reactionBar(s)}
       <div id="continue"></div>`;
+    play('go');
   },
 
   update(el, s) {

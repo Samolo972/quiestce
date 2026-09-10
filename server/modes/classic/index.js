@@ -8,29 +8,38 @@
  * Pour chaque anecdote : elle s'affiche en entier et tout le monde en débat
  * (debate), puis chacun vote (vote), puis on révèle l'auteur (reveal).
  *
- * Toutes les transitions passent par setPhase(), qui annule les timers de la
+ * Toutes les transitions passent par setPhase(), qui annule le timer de la
  * phase précédente. Chaque fonction de fin de phase vérifie d'abord qu'on est
  * bien dans la phase attendue : un timer et un dernier vote qui arrivent en
  * même temps ne peuvent donc pas déclencher deux fois la même transition.
+ *
+ * Joueurs déconnectés : ils gardent leur place et leurs points (voir Room),
+ * mais on ne les attend pas pour finir une étape. Ils rejouent dès leur retour.
  */
 const { randomUUID } = require('crypto');
 const { SETTINGS_SCHEMA, RULES } = require('./settings');
 const { shuffle } = require('../../utils/random');
 
+const EXTENDABLE_PHASES = ['submit', 'debate', 'vote', 'craziestVote']; // bouton "+30 s"
+const REACTION_PHASES = ['debate', 'vote', 'reveal', 'craziestReveal'];
+
 // ================================================================ Utilitaires
 
 function setPhase(room, phase, durationSec, onTimeout) {
   const game = room.game;
-  room.clearAllTimers();
+  room.clearTimer('phase');
   game.phase = phase;
+  game.paused = false;
+  game.remainingMs = null; // temps restant mémorisé pendant une pause
+  game.onTimeout = durationSec && onTimeout ? onTimeout : null;
   game.deadline = durationSec ? Date.now() + durationSec * 1000 : null;
-  if (durationSec && onTimeout) room.setTimer('phase', onTimeout, durationSec * 1000);
+  if (game.onTimeout) room.setTimer('phase', game.onTimeout, durationSec * 1000);
 }
 
-/** Joueurs qui doivent voter sur l'anecdote en cours (tous sauf l'auteur). */
+/** Joueurs connectés qui doivent voter sur l'anecdote en cours (tous sauf l'auteur). */
 function eligibleVoters(room) {
   const authorId = room.game.current.anecdote.authorId;
-  return [...room.players.keys()].filter((id) => id !== authorId);
+  return room.connectedIds().filter((id) => id !== authorId);
 }
 
 /** Joueurs qui ont envoyé toutes leurs anecdotes de la manche. */
@@ -42,7 +51,9 @@ function doneWriters(room) {
 }
 
 function allSubmitted(room) {
-  return doneWriters(room).length >= room.players.size;
+  const done = new Set(doneWriters(room));
+  const ids = room.connectedIds();
+  return ids.length > 0 && ids.every((id) => done.has(id));
 }
 
 /** Anecdotes proposées à la manche bonus (celles dont l'auteur est encore là). */
@@ -56,12 +67,26 @@ function craziestAvailable(room) {
   return new Set(craziestCandidates(room).map((a) => a.authorId)).size >= 2;
 }
 
+function craziestComplete(room) {
+  const votes = room.game.craziest.votes;
+  const ids = room.connectedIds();
+  return ids.length > 0 && ids.every((id) => votes.has(id));
+}
+
+/** Compteur pour les statistiques de fin de partie. */
+function bump(counter, playerId) {
+  counter[playerId] = (counter[playerId] ?? 0) + 1;
+}
+
 // ================================================================= Démarrage
 
 function start(room) {
   room.game = {
     phase: null,
     deadline: null,
+    paused: false,
+    remainingMs: null,
+    onTimeout: null,
     round: 0,
     totalRounds: room.settings.rounds,
     submissions: new Map(), // manche en cours : playerId -> [textes]
@@ -72,6 +97,8 @@ function start(room) {
     current: null, // anecdote en cours de débat / vote / révélation
     nextStep: null, // après roundEnd : 'round' | 'craziest' | 'end'
     craziest: null, // état de la manche bonus
+    // Pour les récompenses de fin : playerId -> nombre
+    stats: { correct: {}, fooled: {}, wrongCast: {} },
   };
   startRound(room);
 }
@@ -105,7 +132,6 @@ function submitAnecdote(room, playerId, payload) {
   if (text.length > RULES.ANECDOTE_MAX_LENGTH) {
     return `Ton anecdote ne doit pas dépasser ${RULES.ANECDOTE_MAX_LENGTH} caractères.`;
   }
-
   if (mine.some((t) => t.toLowerCase() === text.toLowerCase())) {
     return 'Tu as déjà envoyé cette anecdote.';
   }
@@ -119,8 +145,8 @@ function endSubmit(room) {
   const game = room.game;
   if (game.phase !== 'submit') return;
 
-  const fresh = [];
   // À la fin du timer, les anecdotes déjà envoyées sont jouées même si le compte n'y est pas
+  const fresh = [];
   for (const [authorId, texts] of game.submissions) {
     const author = room.getPlayer(authorId);
     if (!author) continue;
@@ -180,7 +206,8 @@ function castVote(room, playerId, payload) {
 
 function checkVotesComplete(room) {
   const votes = room.game.current.votes;
-  if (eligibleVoters(room).every((id) => votes.has(id))) endVote(room);
+  const voters = eligibleVoters(room);
+  if (voters.length > 0 && voters.every((id) => votes.has(id))) endVote(room);
   else room.broadcast();
 }
 
@@ -197,6 +224,12 @@ function endVote(room) {
     const correct = targetId === authorId;
     const points = correct ? RULES.CORRECT_GUESS_POINTS : 0;
     voter.score += points;
+    if (correct) {
+      bump(game.stats.correct, voterId);
+    } else {
+      bump(game.stats.wrongCast, voterId);
+      bump(game.stats.fooled, authorId);
+    }
     votes.push({
       voterId,
       voterName: voter.name,
@@ -257,7 +290,7 @@ function voteCraziest(room, playerId, payload) {
   if (anecdote.authorId === playerId) return 'Pas de vote pour ta propre anecdote 😉';
 
   game.craziest.votes.set(playerId, anecdote.id);
-  if (game.craziest.votes.size >= room.players.size) endCraziest(room);
+  if (craziestComplete(room)) endCraziest(room);
   else room.broadcast();
 }
 
@@ -305,11 +338,31 @@ function endGame(room, reason) {
   room.broadcast();
 }
 
-// ======================================================= Actions des joueurs
+/**
+ * Récompenses de fin : pour chaque statistique, le ou les joueurs en tête.
+ * correct = bons votes, fooled = votes trompés par ses anecdotes, wrongCast = votes ratés.
+ */
+function awards(room) {
+  return ['correct', 'fooled', 'wrongCast']
+    .map((key) => {
+      const entries = Object.entries(room.game.stats[key]).filter(([id]) => room.getPlayer(id));
+      const max = Math.max(0, ...entries.map(([, n]) => n));
+      if (!max) return null;
+      return { key, value: max, playerIds: entries.filter(([, n]) => n === max).map(([id]) => id) };
+    })
+    .filter(Boolean);
+}
+
+// ====================================================== Contrôles du host
+
+function hostOnly(room, playerId) {
+  return room.isHost(playerId) ? null : 'Seul le host peut faire ça.';
+}
 
 /** Le host peut écourter le débat et les écrans de transition. */
 function hostContinue(room, playerId) {
-  if (!room.isHost(playerId)) return 'Seul le host peut passer à la suite.';
+  const denied = hostOnly(room, playerId);
+  if (denied) return denied;
   switch (room.game.phase) {
     case 'debate': return startVote(room);
     case 'reveal': return nextAnecdote(room);
@@ -319,11 +372,71 @@ function hostContinue(room, playerId) {
   }
 }
 
+/** "+30 s" : rallonge l'étape en cours (écriture, débat, votes). */
+function extendPhase(room, playerId) {
+  const denied = hostOnly(room, playerId);
+  if (denied) return denied;
+  const game = room.game;
+  if (!EXTENDABLE_PHASES.includes(game.phase)) return 'Impossible de rallonger cette étape.';
+
+  const extra = RULES.EXTEND_SECONDS * 1000;
+  if (game.paused) {
+    game.remainingMs += extra;
+  } else {
+    game.deadline += extra;
+    room.setTimer('phase', game.onTimeout, game.deadline - Date.now());
+  }
+  room.toast(`Le host ajoute ${RULES.EXTEND_SECONDS} secondes.`);
+  room.broadcast();
+}
+
+/** Pause / reprise : le compte à rebours est gelé, les votes restent possibles. */
+function togglePause(room, playerId) {
+  const denied = hostOnly(room, playerId);
+  if (denied) return denied;
+  const game = room.game;
+  if (!game.onTimeout) return 'Rien à mettre en pause pour le moment.';
+
+  if (game.paused) {
+    game.paused = false;
+    game.deadline = Date.now() + game.remainingMs;
+    game.remainingMs = null;
+    room.setTimer('phase', game.onTimeout, game.deadline - Date.now());
+    room.toast('La partie reprend.');
+  } else {
+    game.paused = true;
+    game.remainingMs = Math.max(0, game.deadline - Date.now());
+    game.deadline = null;
+    room.clearTimer('phase');
+    room.toast('Partie en pause.');
+  }
+  room.broadcast();
+}
+
+// ================================================================== Réactions
+
+/** Réaction emoji anonyme, diffusée à tous (écrans partagés compris). */
+function react(room, playerId, payload) {
+  if (!REACTION_PHASES.includes(room.game.phase)) return;
+  const emoji = payload?.emoji;
+  if (!RULES.REACTIONS.includes(emoji)) return 'Réaction inconnue.';
+  const player = room.getPlayer(playerId);
+  const now = Date.now();
+  if (now - (player.lastReactionAt ?? 0) < RULES.REACTION_COOLDOWN_MS) return; // trop rapide : ignorée
+  player.lastReactionAt = now;
+  room.emitAll('room:reaction', { emoji });
+}
+
+// ======================================================= Actions des joueurs
+
 const ACTIONS = {
   submit: submitAnecdote,
   vote: castVote,
   craziestVote: voteCraziest,
+  react,
   continue: hostContinue,
+  extend: extendPhase,
+  pause: togglePause,
 };
 
 function handleAction(room, playerId, type, payload) {
@@ -332,7 +445,23 @@ function handleAction(room, playerId, type, payload) {
   return action(room, playerId, payload);
 }
 
-// ================================================================ Déconnexions
+// ============================================================ Connexions
+
+/** Un joueur a perdu la connexion : on ne l'attend plus pour finir l'étape. */
+function onPlayerDisconnect(room) {
+  const game = room.game;
+  switch (game.phase) {
+    case 'submit':
+      if (allSubmitted(room)) return endSubmit(room);
+      break;
+    case 'vote':
+      return checkVotesComplete(room);
+    case 'craziestVote':
+      if (craziestComplete(room)) return endCraziest(room);
+      break;
+  }
+  room.broadcast();
+}
 
 /** Appelé après le retrait du joueur de la room : la partie continue sans lui. */
 function onPlayerLeave(room, playerId, player) {
@@ -373,7 +502,7 @@ function onPlayerLeave(room, playerId, player) {
       for (const [voterId, anecdoteId] of votes) {
         if (!validIds.has(anecdoteId)) votes.delete(voterId);
       }
-      if (votes.size >= room.players.size) return endCraziest(room);
+      if (craziestComplete(room)) return endCraziest(room);
       break;
     }
   }
@@ -383,8 +512,9 @@ function onPlayerLeave(room, playerId, player) {
 // ============================================================ Vue par joueur
 
 /**
- * Ce que voit un joueur. Ne jamais y mettre ce qui doit rester secret :
- * l'auteur avant la révélation, qui a voté pour qui…
+ * Ce que voit un joueur (ou un écran partagé si playerId est null). Ne
+ * jamais y mettre ce qui doit rester secret : l'auteur avant la révélation,
+ * qui a voté pour qui…
  */
 function getView(room, playerId) {
   const game = room.game;
@@ -393,6 +523,9 @@ function getView(room, playerId) {
     round: game.round,
     totalRounds: game.totalRounds,
     deadline: game.deadline,
+    paused: game.paused,
+    reactions: RULES.REACTIONS,
+    extendSeconds: RULES.EXTEND_SECONDS,
   };
 
   switch (game.phase) {
@@ -465,7 +598,7 @@ function getView(room, playerId) {
       return { ...base, ...game.craziest.result };
 
     default: // 'end'
-      return base;
+      return { ...base, awards: awards(room) };
   }
 }
 
@@ -475,6 +608,7 @@ module.exports = {
   settingsSchema: SETTINGS_SCHEMA,
   start,
   handleAction,
+  onPlayerDisconnect,
   onPlayerLeave,
   getView,
 };

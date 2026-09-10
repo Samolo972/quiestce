@@ -1,8 +1,8 @@
 /**
- * Écran d'accueil : créer une partie ou en rejoindre une avec un code.
- * Un lien d'invitation /?code=ABCD pré-remplit le code.
+ * Écran d'accueil : créer une partie, en rejoindre une avec un code, ou
+ * l'afficher sur un grand écran. Un lien d'invitation /?code=ABCD pré-remplit le code.
  */
-import { request } from '../net.js';
+import { request, session } from '../net.js';
 import { esc, checkResponse, tokenHtml } from '../ui.js';
 
 const NAME_KEY = 'qadc:name';
@@ -17,12 +17,20 @@ function readName(el) {
   return name;
 }
 
-async function send(el, event, data) {
+function readCode(el) {
+  const code = el.querySelector('#code').value.trim().toUpperCase();
+  if (!code) el.querySelector('#code').focus();
+  return code;
+}
+
+async function send(el, event, data, { spectator = false } = {}) {
   el.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-  const ok = checkResponse(await request(event, data));
+  const res = await request(event, data);
   el.querySelectorAll('button').forEach((b) => { b.disabled = false; });
-  // Une fois dans la room, on retire ?code= de l'URL
-  if (ok) history.replaceState(null, '', location.pathname);
+  if (!checkResponse(res)) return;
+  // De quoi reprendre sa place après une coupure ou un rechargement
+  session.set(spectator ? { code: res.code, spectator: true } : { code: res.code, token: res.token });
+  history.replaceState(null, '', location.pathname); // on retire ?code= de l'URL
 }
 
 export default {
@@ -55,6 +63,10 @@ export default {
                  autocapitalize="characters" spellcheck="false">
         </label>
         <button type="submit" class="btn ${code ? 'btn-go big' : 'btn-ink'} block">Rejoindre</button>
+
+        <div class="divider"><span>télé ou ordinateur</span></div>
+        <button type="button" class="btn btn-soft block" id="watch">Afficher la partie sur un grand écran</button>
+        <p class="hint small center">L'écran montre les anecdotes et les résultats en grand ; chacun joue sur son téléphone. Pas besoin de pseudo.</p>
       </form>`;
 
     el.querySelector('#create')?.addEventListener('click', () => {
@@ -65,10 +77,14 @@ export default {
     el.querySelector('#home-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const name = readName(el);
-      const roomCode = el.querySelector('#code').value.trim().toUpperCase();
       if (!name) return;
-      if (!roomCode) return el.querySelector('#code').focus();
-      send(el, 'room:join', { code: roomCode, name });
+      const roomCode = readCode(el);
+      if (roomCode) send(el, 'room:join', { code: roomCode, name });
+    });
+
+    el.querySelector('#watch').addEventListener('click', () => {
+      const roomCode = readCode(el);
+      if (roomCode) send(el, 'room:watch', { code: roomCode }, { spectator: true });
     });
 
     el.querySelector('#code').addEventListener('input', (e) => {

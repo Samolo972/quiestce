@@ -49,6 +49,9 @@ const RULES = {
   REVEAL_DURATION: 15,
   ROUND_END_DURATION: 20,
   CRAZIEST_REVEAL_DURATION: 25,
+  EXTEND_SECONDS: 30, // bouton "+30 s" du host
+  REACTIONS: ['😂', '😱', '🤯', '🤔', '🙄', '👀'],
+  REACTION_COOLDOWN_MS: 350, // une réaction max toutes les 350 ms par joueur
 };
 
 module.exports = { SETTINGS_SCHEMA, RULES };

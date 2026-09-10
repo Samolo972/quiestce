@@ -12,7 +12,7 @@ aucun build). Tout l'état des parties vit en mémoire.
 ```bash
 npm install
 npm run dev          # http://localhost:3001 (redémarre à chaque modif du serveur)
-npm run smoke        # 3 bots jouent une partie complète contre le serveur
+npm test             # des bots jouent des parties complètes contre le serveur
 ```
 
 Pour tester depuis un téléphone sur le même Wi-Fi : `http://<IP-du-PC>:3001`.
@@ -22,11 +22,15 @@ Pour tester avec seulement 2 onglets : `MIN_PLAYERS=2 npm run dev`
 Variables d'environnement : `PORT` (défaut 3001), `HOST` (défaut : toutes les
 interfaces), `MIN_PLAYERS` (défaut 3).
 
+À chaque push sur `main`, GitHub Actions vérifie la syntaxe et rejoue ces
+parties (`.github/workflows/ci.yml`).
+
 ## Déroulé d'une partie
 
-1. **Lobby** : les joueurs rejoignent avec un code à 4 caractères ; le host règle la partie.
+1. **Lobby** : les joueurs rejoignent avec un code à 4 caractères, un lien ou un
+   QR code ; le host règle la partie.
 2. **Écriture** : chacun écrit une ou plusieurs anecdotes sur lui (nombre choisi
-   par le host), une à la fois, anonymement.
+   par le host), une à la fois, anonymement. Un bouton propose des idées.
 3. Pour chaque anecdote, dans un ordre aléatoire :
    - **Débat** : l'anecdote s'affiche en entier chez tout le monde, on en discute
      pendant le temps choisi par le host (qui peut aussi passer au vote plus tôt) ;
@@ -36,7 +40,21 @@ interfaces), `MIN_PLAYERS` (défaut 3).
    Exemple : 1 manche avec 3 anecdotes par joueur.
 5. **Manche bonus** (optionnelle) : vote pour l'anecdote la plus folle de la partie,
    avec dépouillement en direct.
-6. **Podium** final.
+6. **Podium** final et récompenses : meilleur détective, maître du mystère, le plus crédule.
+
+### Autour du jeu
+
+- **Écran partagé** : une télé ou un ordinateur peut « afficher la partie sur un
+  grand écran » depuis l'accueil (code seulement, sans pseudo). Il montre tout en
+  grand, ne compte pas comme joueur et ne reçoit jamais d'information secrète.
+- **Reconnexion** : l'écran reste allumé pendant la partie (Wake Lock). En cas de
+  coupure, le joueur garde sa place et ses points 60 s ; son téléphone le
+  reconnecte automatiquement. On ne l'attend pas pour finir une étape.
+- **Arrivée en cours de partie** : on peut rejoindre à tout moment.
+- **Contrôles du host** : +30 s, pause / reprise, passer à la suite, retirer un
+  joueur (depuis le tableau des scores).
+- **Ambiance** : réactions emoji anonymes pendant le débat et la révélation,
+  petits sons et vibrations (coupables depuis la barre du haut).
 
 ### Réglages du host
 
@@ -64,10 +82,10 @@ Les valeurs se modifient dans `RULES` (`server/modes/classic/settings.js`).
 
 ```
 server/
-  index.js              HTTP + Socket.io + fichiers statiques
-  config.js             constantes globales (port, min/max joueurs…)
-  socket.js             événements communs : créer/rejoindre/quitter/réglages/lancer
-  rooms/Room.js         état d'une room : joueurs, host, réglages, timers, diffusion
+  index.js              HTTP + Socket.io + fichiers statiques + QR codes (/qr/:code)
+  config.js             constantes globales (joueurs, reconnexion, limites anti-abus)
+  socket.js             événements communs : créer/rejoindre/reprendre/quitter/écran partagé/réglages/exclure
+  rooms/Room.js         état d'une room : joueurs, reconnexion, écrans partagés, timers, diffusion
   rooms/roomManager.js  registre des rooms en mémoire (Map code -> Room)
   modes/index.js        registre des modes de jeu
   modes/classic/        mode "Qui a dit ça ?"
@@ -76,21 +94,26 @@ server/
 public/
   index.html, css/style.css
   fonts/                police Baloo 2 hébergée localement (licence OFL)
-  js/main.js            choisit l'écran selon l'état reçu
-  js/net.js, store.js   socket, horloge serveur, état client
-  js/ui.js              échappement HTML, toasts, comptes à rebours
+  js/main.js            choisit l'écran, reconnexion, écran allumé, réactions, barre du host
+  js/net.js, store.js   socket, session de reconnexion, horloge serveur, état client
+  js/ui.js              échappement HTML, jetons des joueurs, comptes à rebours
+  js/sound.js           sons synthétisés et vibrations
+  js/prompts.js         idées d'anecdotes
   js/scoreboard.js      scores permanents
   js/screens/*.js       un fichier par écran
-scripts/smoke-test.js   partie complète jouée par 3 bots
+scripts/smoke-test.js   parties jouées par des bots (npm test)
 deploy/                 exemples nginx (WebSocket) + service systemd
 ```
 
 ### Principes
 
 - **Le serveur fait autorité.** À chaque changement, il envoie à chaque joueur
-  `room:state`, une vue *filtrée pour lui* (`mode.getView`). L'auteur d'une
-  anecdote ne quitte jamais le serveur avant la révélation, et pendant le vote
-  on ne voit que le nombre de votants (pas qui a voté, ce qui trahirait l'auteur).
+  `room:state`, une vue *filtrée pour lui* (`mode.getView`) ; un écran partagé
+  reçoit la vue publique (`getView(room, null)`). L'auteur d'une anecdote ne
+  quitte jamais le serveur avant la révélation, et pendant le vote on ne voit
+  que le nombre de votants (pas qui a voté, ce qui trahirait l'auteur).
+- **Deux identifiants par joueur** : `id` est public (il sert à le désigner),
+  `token` est secret (il sert à se reconnecter) et n'est jamais diffusé.
 - **Les timers tournent côté serveur** (`room.setTimer`) avec les valeurs du lobby.
   Le client reçoit seulement des échéances (`deadline`) et affiche le décompte,
   corrigé du décalage d'horloge du téléphone.
@@ -106,18 +129,20 @@ Créer `server/modes/<id>/index.js` qui exporte `id`, `name`, `settingsSchema`,
 `server/modes/index.js`), l'enregistrer dans `MODES`, puis ajouter les écrans
 correspondant à ses phases dans `public/js/screens/` et `SCREENS` (`main.js`).
 
+## Protections
+
+- Limite de débit par connexion (30 événements / 5 s).
+- 5 créations de partie par adresse IP toutes les 10 minutes, 300 parties
+  simultanées au maximum, 4 écrans partagés par partie.
+- Parties sans activité depuis 3 h supprimées automatiquement.
+- Entrées validées côté serveur et échappées à l'affichage (pas d'injection HTML).
+
 ## Limites connues
 
-- **Déconnexion = départ définitif.** Sur mobile, verrouiller l'écran ou changer
-  d'appli coupe souvent le WebSocket : le joueur est retiré de la partie. Piste
-  prévue : garder le joueur quelques dizaines de secondes après une déconnexion
-  et le rattacher via un jeton en `sessionStorage` (le `playerId` est déjà
-  distinct du `socket.id` pour ça).
 - **Mémoire uniquement.** Un redémarrage du serveur coupe les parties en cours.
   Une base (SQLite…) ne deviendrait utile que pour des données durables
   (historique, statistiques).
 - **Une seule instance.** Pour en faire tourner plusieurs, il faudrait Redis
   (adaptateur Socket.io + état des rooms).
-- **Pas de modération ni de rate limiting** : n'importe qui avec le code peut
-  rejoindre le lobby. Les entrées sont validées côté serveur et échappées à
-  l'affichage (pas d'injection HTML).
+- **Reconnexion par onglet** : la session est gardée dans l'onglet
+  (`sessionStorage`). Fermer complètement l'onglet fait perdre sa place.

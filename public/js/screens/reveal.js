@@ -2,11 +2,17 @@
  * Révélation : bandeau de résultat personnel, le "?" se retourne pour
  * montrer l'auteur, puis le détail des votes.
  */
-import { esc, renderContinue, plural, bubbleHtml, tokenHtml, playerById } from '../ui.js';
+import { esc, renderContinue, plural, bubbleHtml, tokenHtml, playerById, reactionBar } from '../ui.js';
+import { play, vibrate } from '../sound.js';
 
-/** Bandeau du haut, propre à chaque joueur. */
+/** Bandeau du haut, propre à chaque joueur (neutre sur un écran partagé). */
 function bannerFor(s) {
   const g = s.game;
+  if (!s.you) {
+    const good = g.votes.filter((v) => v.correct).length;
+    const s = good > 1 ? 's' : '';
+    return { cls: 'neutral', title: 'Verdict', sub: g.votes.length ? `${good} bon${s} vote${s} sur ${g.votes.length}` : "Personne n'a voté" };
+  }
   const myVote = g.votes.find((v) => v.voterId === s.you);
   if (g.authorId === s.you) {
     return g.undetectable
@@ -47,14 +53,25 @@ export default {
             ${g.votes.map((v) => `
               <li class="${v.correct ? 'ok' : 'ko'}">
                 ${tokenHtml(playerById(s, v.voterId))}<b>${esc(v.voterName)}</b>
-                <span class="hint">a désigné</span>
+                <span class="hint" aria-label="a désigné">→</span>
                 ${tokenHtml(playerById(s, v.targetId))}<b>${esc(v.targetName)}</b>
                 <span class="verdict">${v.correct ? `✓ +${v.points}` : '✕'}</span>
               </li>`).join('')}
           </ul>` : '<p class="hint">Personne n\'a voté.</p>'}
       </section>
 
+      ${reactionBar(s)}
       <div id="continue"></div>`;
+
+    if (banner.cls === 'ok') {
+      play('ok');
+      vibrate([60, 40, 60]);
+    } else if (banner.cls === 'ko') {
+      play('ko');
+      vibrate(250);
+    } else {
+      play('go');
+    }
   },
 
   update(el, s) {

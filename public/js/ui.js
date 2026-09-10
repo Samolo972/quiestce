@@ -2,6 +2,7 @@
  * Petits utilitaires d'interface partagés par les écrans.
  */
 import { serverNow, action } from './net.js';
+import { play } from './sound.js';
 
 /** Échappe le texte saisi par les joueurs avant de l'insérer en HTML. */
 export function esc(value) {
@@ -82,11 +83,15 @@ export function tick() {
     const deadline = Number(el.dataset.deadline);
     if (!deadline) {
       el.textContent = '';
+      el.classList.remove('urgent');
       return;
     }
     const secs = secondsLeft(deadline);
     el.textContent = el.classList.contains('num') ? String(secs) : `${secs}s`;
     el.classList.toggle('urgent', secs <= 5);
+    // Tic-tac sur les 5 dernières secondes, une fois par seconde (disque du timer)
+    if (el.classList.contains('num') && secs > 0 && secs <= 5 && el.dataset.last !== String(secs)) play('tick');
+    el.dataset.last = String(secs);
   });
 }
 
@@ -116,6 +121,15 @@ export function bubbleHtml(text, size = '') {
   return `<figure class="bubble ${size}"><blockquote>${esc(text)}</blockquote></figure>`;
 }
 
+/** Barre de réactions emoji (joueurs uniquement ; le clic est géré dans main.js). */
+export function reactionBar(state) {
+  if (!state.you) return '';
+  return `
+    <div class="reaction-bar" role="group" aria-label="Réagir">
+      ${(state.game?.reactions ?? []).map((emoji) => `<button type="button" class="react" data-react="${emoji}">${emoji}</button>`).join('')}
+    </div>`;
+}
+
 // ----------------------------------------------------------------- Scores
 
 /** Joueurs triés par score, avec leur rang (les ex æquo partagent le rang). */
@@ -135,12 +149,14 @@ export function rankPlayers(players) {
  * autres voient le compte à rebours avant la suite automatique.
  */
 export function renderContinue(container, state, label = 'Continuer', waitLabel = 'Suite dans') {
-  const isHost = state.hostId === state.you;
-  const key = `${isHost}|${state.game.deadline}|${label}`;
+  const isHost = Boolean(state.you) && state.hostId === state.you;
+  const key = `${isHost}|${state.game.deadline}|${state.game.paused}|${label}`;
   if (container.dataset.key === key) return; // évite de recréer le bouton à chaque mise à jour
   container.dataset.key = key;
 
-  const countdown = `${esc(waitLabel)} ${timerHtml(state.game.deadline, 'timer inline')}`;
+  const countdown = state.game.paused
+    ? 'Partie en pause'
+    : `${esc(waitLabel)} ${timerHtml(state.game.deadline, 'timer inline')}`;
   if (isHost) {
     container.innerHTML = `
       <button type="button" class="btn btn-go block">${esc(label)}</button>

@@ -1,0 +1,28 @@
+# Vérifie à chaque push que le jeu fonctionne encore :
+# syntaxe de tous les fichiers JS, puis parties jouées par des bots.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Vérifier la syntaxe
+        run: for f in $(find server public/js scripts -name '*.js'); do node --check "$f"; done
+
+      - name: Jouer des parties de bout en bout
+        run: npm test
