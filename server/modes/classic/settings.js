@@ -46,7 +46,7 @@ const RULES = {
   CORRECT_GUESS_POINTS: 1,
   UNDETECTABLE_BONUS: 1,
   CRAZIEST_BONUS: 2,
-  REVEAL_DURATION: 15,
+  // La révélation n'a pas de durée : le host passe à la suite après l'histoire de l'auteur
   ROUND_END_DURATION: 20,
   CRAZIEST_REVEAL_DURATION: 25,
   EXTEND_SECONDS: 30, // bouton "+30 s" du host

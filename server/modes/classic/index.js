@@ -249,7 +249,8 @@ function endVote(room) {
   }
 
   current.result = { votes, undetectable, authorBonus };
-  setPhase(room, 'reveal', RULES.REVEAL_DURATION, () => nextAnecdote(room));
+  // Pas de minuteur : l'auteur raconte son histoire, le host passe à la suite quand il veut
+  setPhase(room, 'reveal', null);
   room.broadcast();
 }
 

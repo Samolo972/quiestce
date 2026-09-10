@@ -46,6 +46,8 @@ export default {
         ? `<p class="badge">Personne ne l'a démasqué${g.authorBonus ? ` : +${plural(g.authorBonus, 'point')} pour ${esc(g.authorName)}` : ''}</p>`
         : ''}
 
+      <p class="storytime">${isMe ? "À toi de raconter l'histoire&nbsp;!" : `${esc(g.authorName)} raconte l'histoire…`}</p>
+
       <section class="panel">
         <h3>Les votes</h3>
         ${g.votes.length ? `
@@ -75,6 +77,7 @@ export default {
   },
 
   update(el, s) {
-    renderContinue(el.querySelector('#continue'), s, 'Anecdote suivante');
+    // Pas de suite automatique : on laisse l'auteur raconter, le host décide
+    renderContinue(el.querySelector('#continue'), s, 'Anecdote suivante', '', "Le host passera à la suite après l'histoire.");
   },
 };

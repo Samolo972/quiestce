@@ -313,6 +313,8 @@ body.show-scores #scoreboard { transform: none; }
 .wait-screen h2 { font-size: 1.8rem; }
 
 .continue-note { color: var(--mist-strong); text-align: center; font-size: 0.95rem; margin-top: 0.6rem; }
+/* Révélation : le moment où l'auteur raconte son histoire */
+.storytime { margin: 0; color: var(--go); font-size: 1.2rem; font-weight: 800; text-align: center; }
 .badge {
   justify-self: center;
   padding: 0.3rem 0.9rem;

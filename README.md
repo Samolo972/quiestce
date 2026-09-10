@@ -36,6 +36,8 @@ parties (`.github/workflows/ci.yml`).
      pendant le temps choisi par le host (qui peut aussi passer au vote plus tôt) ;
    - **Vote** : chacun désigne l'auteur supposé (sauf l'auteur lui-même) ;
    - **Révélation** : une fois tous les votes reçus, on découvre l'auteur et qui a voté pour qui.
+     Pas de suite automatique : l'auteur raconte son histoire, et seul le host
+     passe à l'anecdote suivante.
 4. Autant de manches que réglé : chaque manche recommence par l'écriture.
    Exemple : 1 manche avec 3 anecdotes par joueur.
 5. **Manche bonus** (optionnelle) : vote pour l'anecdote la plus folle de la partie,

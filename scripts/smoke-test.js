@@ -155,6 +155,12 @@ async function classicScenario() {
         }
 
         case 'reveal':
+          // La révélation attend le host (l'auteur raconte son histoire) : pas de minuteur
+          if (g.deadline !== null) fail('la révélation ne doit pas avoir de suite automatique');
+          if (bot === bob) {
+            const notHost = await bob.emit('game:action', { type: 'continue' });
+            if (!notHost.error) fail('seul le host peut passer à l’anecdote suivante');
+          }
           if (bot === alice) {
             log(`révélation m${g.round} #${g.index} : auteur ${g.authorName}, votes ${g.votes.map((v) => `${v.voterName}->${v.targetName}${v.correct ? `(+${v.points})` : ''}`).join(', ')}${g.undetectable ? ' [indétectable]' : ''}`);
             return bot.emit('game:action', { type: 'continue' });

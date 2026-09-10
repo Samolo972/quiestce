@@ -146,21 +146,23 @@ export function rankPlayers(players) {
 
 /**
  * Zone de bas d'écran pour les transitions : le host peut passer, les
- * autres voient le compte à rebours avant la suite automatique.
+ * autres voient le compte à rebours avant la suite automatique. Sans
+ * compte à rebours (étape sans durée), les autres lisent `idleText`.
  */
-export function renderContinue(container, state, label = 'Continuer', waitLabel = 'Suite dans') {
+export function renderContinue(container, state, label = 'Continuer', waitLabel = 'Suite dans', idleText = 'Le host passera à la suite.') {
   const isHost = Boolean(state.you) && state.hostId === state.you;
   const key = `${isHost}|${state.game.deadline}|${state.game.paused}|${label}`;
   if (container.dataset.key === key) return; // évite de recréer le bouton à chaque mise à jour
   container.dataset.key = key;
 
-  const countdown = state.game.paused
-    ? 'Partie en pause'
-    : `${esc(waitLabel)} ${timerHtml(state.game.deadline, 'timer inline')}`;
+  let countdown = `${esc(waitLabel)} ${timerHtml(state.game.deadline, 'timer inline')}`;
+  if (state.game.paused) countdown = 'Partie en pause';
+  else if (!state.game.deadline) countdown = isHost ? '' : esc(idleText);
+
   if (isHost) {
     container.innerHTML = `
       <button type="button" class="btn btn-go block">${esc(label)}</button>
-      <p class="continue-note">${countdown}</p>`;
+      ${countdown ? `<p class="continue-note">${countdown}</p>` : ''}`;
     container.querySelector('button').addEventListener('click', async (e) => {
       e.currentTarget.disabled = true;
       checkResponse(await action('continue'));
