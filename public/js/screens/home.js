@@ -3,7 +3,7 @@
  * Un lien d'invitation /?code=ABCD pré-remplit le code.
  */
 import { request } from '../net.js';
-import { esc, checkResponse } from '../ui.js';
+import { esc, checkResponse, tokenHtml } from '../ui.js';
 
 const NAME_KEY = 'qadc:name';
 
@@ -31,26 +31,30 @@ export default {
     const savedName = sessionStorage.getItem(NAME_KEY) || '';
 
     el.innerHTML = `
-      <section class="hero">
-        <div class="hero-emoji">🤫</div>
-        <h1>Qui a dit ça ?</h1>
-        <p class="muted">Chacun écrit une anecdote, anonymement. À vous de deviner qui se cache derrière.</p>
+      <section class="brand">
+        <div class="brand-tokens" aria-hidden="true">
+          ${[0, 1, 2, 3].map((slot) => tokenHtml({ slot })).join('')}
+        </div>
+        <h1 class="logo-bubble">Qui a dit ça&nbsp;?</h1>
+        <p class="tagline">Chacun écrit une anecdote vraie, en secret. Vous débattez, vous votez, et l'auteur est démasqué.</p>
       </section>
 
-      <form class="card" id="home-form" autocomplete="off">
+      <form class="panel join-panel" id="home-form" autocomplete="off">
         <label class="field">
           <span>Ton pseudo</span>
           <input id="name" maxlength="16" value="${esc(savedName)}" placeholder="Ex : Sam" autocomplete="nickname">
         </label>
 
-        ${code ? '' : '<button type="button" class="btn primary block" id="create">Créer une partie</button><div class="divider"><span>ou</span></div>'}
+        ${code ? '' : `
+          <button type="button" class="btn btn-go big block" id="create">Créer une partie</button>
+          <div class="divider"><span>ou rejoins tes amis</span></div>`}
 
         <label class="field">
           <span>Code de la partie</span>
           <input id="code" class="code-input" maxlength="6" value="${esc(code)}" placeholder="ABCD"
                  autocapitalize="characters" spellcheck="false">
         </label>
-        <button type="submit" class="btn ${code ? 'primary' : ''} block">Rejoindre</button>
+        <button type="submit" class="btn ${code ? 'btn-go big' : 'btn-ink'} block">Rejoindre</button>
       </form>`;
 
     el.querySelector('#create')?.addEventListener('click', () => {

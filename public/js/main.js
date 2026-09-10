@@ -33,6 +33,15 @@ const scoreboardEl = document.getElementById('scoreboard');
 const topbar = document.getElementById('topbar');
 let mounted = { key: null, screen: null };
 
+/** Où en est la partie, affiché dans la barre du haut. */
+function roundLabel(state) {
+  const g = state.game;
+  if (!g) return "Salle d'attente";
+  if (g.phase === 'end') return 'Partie terminée';
+  if (g.phase.startsWith('craziest')) return 'Manche bonus';
+  return `Manche ${g.round} sur ${g.totalRounds}`;
+}
+
 function screenName(state) {
   if (!state) return 'home';
   if (state.phase === 'lobby') return 'lobby';
@@ -58,7 +67,10 @@ function render(state) {
   document.body.classList.toggle('in-room', Boolean(state));
   if (!state) document.body.classList.remove('show-scores');
   topbar.hidden = !state;
-  if (state) document.getElementById('topbar-code').textContent = state.code;
+  if (state) {
+    document.getElementById('topbar-code').textContent = state.code;
+    document.getElementById('topbar-round').textContent = roundLabel(state);
+  }
   renderScoreboard(scoreboardEl, state);
   tick();
 }

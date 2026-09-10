@@ -2,18 +2,16 @@
  * Fin de partie : podium et classement final.
  */
 import { request, leaveRoom } from '../net.js';
-import { esc, checkResponse, rankPlayers } from '../ui.js';
-
-const MEDALS = { 1: '🥇', 2: '🥈', 3: '🥉' };
+import { esc, checkResponse, rankPlayers, tokenHtml, tokenClass, pts } from '../ui.js';
 
 export default {
   key: () => 'end',
 
   mount(el) {
     el.innerHTML = `
-      <section class="center"><h1>🏆 Classement final</h1></section>
+      <h1 class="screen-title">Classement final</h1>
       <div class="podium" id="podium"></div>
-      <section class="card"><ol class="ranking" id="ranking"></ol></section>
+      <ol class="ranking" id="ranking"></ol>
       <div id="end-actions" class="stack"></div>`;
 
     el.querySelector('#end-actions').addEventListener('click', async (e) => {
@@ -27,23 +25,27 @@ export default {
 
     // Podium dans l'ordre visuel classique : 2e, 1er, 3e
     const [first, second, third] = ranked;
-    el.querySelector('#podium').innerHTML = [second, first, third]
-      .map((p, i) => p && `
-        <div class="podium-step step-${[2, 1, 3][i]} ${p.id === s.you ? 'me' : ''}">
-          <div class="podium-name">${MEDALS[p.rank] ?? ''} ${esc(p.name)}</div>
-          <div class="podium-block"><b>${p.score}</b><small>pts</small></div>
+    el.querySelector('#podium').innerHTML = [[second, 2], [first, 1], [third, 3]]
+      .filter(([p]) => p)
+      .map(([p, place]) => `
+        <div class="podium-step step-${place} ${tokenClass(p)} ${p.id === s.you ? 'me' : ''}">
+          ${tokenHtml(p)}
+          <div class="podium-name">${esc(p.name)}</div>
+          <div class="podium-score">${pts(p.score)}</div>
+          <div class="podium-block">${p.rank}</div>
         </div>`)
-      .filter(Boolean).join('');
+      .join('');
 
     el.querySelector('#ranking').innerHTML = ranked.map((p) => `
       <li class="${p.id === s.you ? 'me' : ''}">
-        <span class="rank">${p.rank}</span><span class="name">${esc(p.name)}</span><b>${p.score} pts</b>
+        <span class="rank">${p.rank}</span>${tokenHtml(p)}
+        <span class="name">${esc(p.name)}</span><b class="pts">${pts(p.score)}</b>
       </li>`).join('');
 
     el.querySelector('#end-actions').innerHTML = `
       ${s.hostId === s.you
-        ? '<button type="button" class="btn primary block" id="replay">🔁 Rejouer avec les mêmes joueurs</button>'
-        : '<p class="muted center">Le host peut relancer une partie.</p>'}
-      <button type="button" class="btn ghost block" id="quit">Quitter</button>`;
+        ? '<button type="button" class="btn btn-go block" id="replay">Rejouer avec les mêmes joueurs</button>'
+        : '<p class="continue-note">Le host peut relancer une partie.</p>'}
+      <button type="button" class="btn btn-flat block" id="quit">Quitter</button>`;
   },
 };

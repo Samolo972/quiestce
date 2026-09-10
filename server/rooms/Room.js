@@ -24,6 +24,12 @@ class Room {
   // ---------------------------------------------------------------- Joueurs
 
   addPlayer(player) {
+    // "slot" = la plus petite place libre : il fixe la forme et la couleur du
+    // joueur côté client, et ne bouge pas si quelqu'un d'autre part.
+    const used = new Set([...this.players.values()].map((p) => p.slot));
+    let slot = 0;
+    while (used.has(slot)) slot++;
+    player.slot = slot;
     this.players.set(player.id, player);
     if (!this.hostId) this.hostId = player.id;
   }
@@ -129,7 +135,7 @@ class Room {
       phase: this.phase,
       serverNow: Date.now(), // permet au client de caler ses comptes à rebours
       mode: { id: this.mode.id, name: this.mode.name },
-      players: [...this.players.values()].map(({ id, name, score }) => ({ id, name, score })),
+      players: [...this.players.values()].map(({ id, name, score, slot }) => ({ id, name, score, slot })),
       minPlayers: this.minPlayers,
       maxPlayers: config.MAX_PLAYERS,
       settings: this.settings,

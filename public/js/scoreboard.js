@@ -1,7 +1,7 @@
 /**
  * Tableau des scores permanent (sidebar ou panneau mobile).
  */
-import { esc, rankPlayers } from './ui.js';
+import { esc, rankPlayers, tokenHtml } from './ui.js';
 
 export function renderScoreboard(el, state) {
   el.hidden = !state;
@@ -14,13 +14,13 @@ export function renderScoreboard(el, state) {
   const players = state.phase === 'lobby' ? state.players : rankPlayers(state.players);
 
   el.innerHTML = `
-    <h3>🏆 Scores</h3>
+    <h3>Scores</h3>
     <ol class="score-list">
       ${players.map((p) => `
         <li class="${p.id === state.you ? 'me' : ''}">
-          <span class="rank">${p.rank ?? '•'}</span>
-          <span class="name">${esc(p.name)}${p.id === state.hostId ? ' 👑' : ''}</span>
-          ${showDone ? `<span class="done">${done.has(p.id) ? '✅' : '⏳'}</span>` : ''}
+          ${tokenHtml(p)}
+          <span class="name">${esc(p.name)}${p.id === state.hostId ? ' <small>host</small>' : ''}</span>
+          ${showDone ? `<span class="done ${done.has(p.id) ? 'yes' : ''}" title="${done.has(p.id) ? 'A fini' : 'En cours'}">${done.has(p.id) ? '✓' : '…'}</span>` : ''}
           <b class="score">${p.score}</b>
         </li>`).join('')}
     </ol>`;

@@ -2,7 +2,7 @@
  * Phase de soumission : chaque joueur écrit son anecdote avant la fin du timer.
  */
 import { action } from '../net.js';
-import { checkResponse, timerHtml, secondsLeft, toast } from '../ui.js';
+import { checkResponse, secondsLeft, toast, phaseHeader, setCounter, tokenHtml, playerById } from '../ui.js';
 
 let autoSendTimer = null;
 let sending = false;
@@ -30,29 +30,24 @@ export default {
     const g = s.game;
     sending = false;
     el.innerHTML = `
-      <div class="phase-header">
-        <span class="badge">Manche ${g.round}/${g.totalRounds}</span>
-        ${timerHtml(g.deadline)}
-      </div>
+      ${phaseHeader(g.deadline, "À toi d'écrire", { counter: true })}
 
-      <section class="card" id="write-zone">
-        <h2>Raconte une anecdote sur toi ✍️</h2>
-        <p class="muted">Vraie, courte et si possible surprenante. Personne ne saura que c'est toi… en principe.</p>
+      <section class="panel" id="write-zone">
+        <h2>Raconte une anecdote vraie sur toi</h2>
+        <p class="hint">Courte et surprenante. Personne ne saura qu'elle vient de toi… sauf si tu te trahis pendant le débat.</p>
         <textarea id="anecdote" rows="4" maxlength="${g.maxLength}"
-          placeholder="Ex : J'ai déjà été coincé 2 heures dans un télésiège."></textarea>
+          placeholder="Ex : J'ai déjà été coincé deux heures dans un télésiège."></textarea>
         <div class="row between">
-          <span class="muted small" id="chars">0/${g.maxLength}</span>
-          <button type="button" class="btn primary" id="send">Envoyer</button>
+          <small class="hint" id="chars">0/${g.maxLength}</small>
+          <button type="button" class="btn btn-go" id="send">Envoyer</button>
         </div>
       </section>
 
-      <section class="card center" id="wait-zone" hidden>
-        <div class="big-emoji">✅</div>
-        <h2>Anecdote envoyée !</h2>
-        <p class="muted">On attend les autres…</p>
-      </section>
-
-      <p class="progress center" id="progress"></p>`;
+      <section class="wait-screen" id="wait-zone" hidden>
+        ${tokenHtml(playerById(s, s.you))}
+        <h2>Anecdote envoyée</h2>
+        <p class="soft">On attend les autres…</p>
+      </section>`;
 
     const textarea = el.querySelector('#anecdote');
     textarea.addEventListener('input', () => {
@@ -74,7 +69,7 @@ export default {
     const g = s.game;
     el.querySelector('#write-zone').hidden = g.hasSubmitted;
     el.querySelector('#wait-zone').hidden = !g.hasSubmitted;
-    el.querySelector('#progress').textContent = `${g.doneIds.length}/${g.expected} joueurs ont soumis`;
+    setCounter(el, `${g.doneIds.length}/${g.expected}`, 'envoyées');
     latest = s;
   },
 

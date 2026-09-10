@@ -264,7 +264,7 @@ function endCraziest(room) {
     winnerIds: winners.map((a) => a.id),
     bonus: RULES.CRAZIEST_BONUS,
     candidates: candidates.map((a) => ({
-      id: a.id, text: a.text, authorName: a.authorName, votes: counts.get(a.id),
+      id: a.id, text: a.text, authorId: a.authorId, authorName: a.authorName, votes: counts.get(a.id),
     })),
   };
   setPhase(room, 'craziestReveal', RULES.CRAZIEST_REVEAL_DURATION, () => endGame(room));
@@ -420,8 +420,9 @@ function getView(room, playerId) {
     case 'craziestVote':
       return {
         ...base,
+        // Les auteurs sont déjà tous révélés à ce stade : on peut les envoyer
         candidates: craziestCandidates(room).map((a) => ({
-          id: a.id, text: a.text, authorName: a.authorName, mine: a.authorId === playerId,
+          id: a.id, text: a.text, authorId: a.authorId, authorName: a.authorName, mine: a.authorId === playerId,
         })),
         myVote: game.craziest.votes.get(playerId) ?? null,
         doneIds: [...game.craziest.votes.keys()],

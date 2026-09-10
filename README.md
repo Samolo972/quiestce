@@ -72,6 +72,7 @@ server/
     settings.js         schéma des réglages du lobby + règles fixes (points, durées)
 public/
   index.html, css/style.css
+  fonts/                police Baloo 2 hébergée localement (licence OFL)
   js/main.js            choisit l'écran selon l'état reçu
   js/net.js, store.js   socket, horloge serveur, état client
   js/ui.js              échappement HTML, toasts, comptes à rebours
