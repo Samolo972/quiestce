@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1e1b4b">
+  <title>Qui a dit ça ?</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤫</text></svg>">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Barre du haut : visible uniquement dans une room -->
+  <header id="topbar" hidden>
+    <div class="topbar-code">Code <b id="topbar-code"></b></div>
+    <div class="topbar-actions">
+      <button type="button" class="btn small ghost" id="toggle-scores">🏆 Scores</button>
+      <button type="button" class="btn small ghost" id="leave">Quitter</button>
+    </div>
+  </header>
+
+  <div id="layout">
+    <main id="screen"></main>
+    <!-- Tableau des scores : sidebar sur grand écran, panneau déroulant sur mobile -->
+    <aside id="scoreboard" hidden></aside>
+  </div>
+
+  <div id="toasts" aria-live="polite"></div>
+
+  <!-- Client Socket.io servi automatiquement par le serveur -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
