@@ -1,27 +1,23 @@
 /**
- * Phase de vote avec indices progressifs : les fragments de l'anecdote
- * arrivent un par un depuis le serveur ; plus on vote tôt, plus ça rapporte.
+ * Vote après le débat : chacun désigne l'auteur supposé. L'auteur est révélé
+ * quand tout le monde a voté (ou à la fin du timer).
  */
 import { action } from '../net.js';
 import { esc, checkResponse, timerHtml, plural } from '../ui.js';
-
-let shownFragments = 0; // pour n'animer que les nouveaux fragments
 
 export default {
   key: (s) => `${s.game.round}-${s.game.index}`,
 
   mount(el, s) {
     const g = s.game;
-    shownFragments = 0;
     el.innerHTML = `
       <div class="phase-header">
-        <span class="badge">Anecdote ${g.index}/${g.count} · Manche ${g.round}/${g.totalRounds}</span>
+        <span class="badge">Vote · Anecdote ${g.index}/${g.count}</span>
         ${timerHtml(g.deadline)}
       </div>
 
       <section class="card anecdote-card">
-        <p class="fragments" id="fragments"></p>
-        <p class="hint-info muted small" id="hint-info"></p>
+        <p class="anecdote-text">“${esc(g.text)}”</p>
       </section>
 
       <section class="card" id="vote-zone">
@@ -33,7 +29,7 @@ export default {
       <section class="card center" id="author-zone" hidden>
         <div class="big-emoji">🤫</div>
         <h2>C'est ton anecdote !</h2>
-        <p class="muted">Garde ton sérieux pendant que les autres votent.</p>
+        <p class="muted">Les autres votent… Verdict dans un instant.</p>
       </section>
 
       <p class="progress center" id="progress"></p>`;
@@ -50,25 +46,13 @@ export default {
 
   update(el, s) {
     const g = s.game;
-
-    // Fragments révélés + emplacements masqués pour ceux à venir
-    const hidden = g.totalFragments - g.fragments.length;
-    el.querySelector('#fragments').innerHTML =
-      g.fragments.map((f, i) => `<span class="fragment ${i >= shownFragments ? 'new' : ''}">${esc(f)}</span>`).join(' ')
-      + ' ' + '<span class="fragment masked">•••</span> '.repeat(hidden);
-    shownFragments = g.fragments.length;
-
-    el.querySelector('#hint-info').innerHTML = g.nextHintAt
-      ? `Indice ${g.fragments.length}/${g.totalFragments} · prochain dans ${timerHtml(g.nextHintAt, 'timer inline')}`
-      : 'Anecdote complète 👀';
-
     el.querySelector('#author-zone').hidden = !g.isAuthor;
     el.querySelector('#vote-zone').hidden = g.isAuthor;
 
     if (!g.isAuthor) {
       el.querySelector('#points-hint').innerHTML = g.myVote
-        ? 'Vote enregistré ✔️ Réponse à la fin du vote.'
-        : `Vote maintenant : <b>${plural(g.potentialPoints, 'pt')}</b> si tu as juste`;
+        ? 'Vote enregistré ✔️ Réponse quand tout le monde aura voté.'
+        : `Un bon vote rapporte <b>${plural(g.points, 'pt')}</b>`;
 
       // La liste est reconstruite (un joueur a pu partir) ; pas de champ de saisie ici
       el.querySelector('#choices').innerHTML = s.players

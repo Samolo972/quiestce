@@ -248,11 +248,7 @@ input[type="range"] { padding: 0; accent-color: var(--accent); background: trans
 .anecdote-card { background: linear-gradient(135deg, var(--card-2), var(--card)); }
 .anecdote-text { font-size: 1.2rem; font-weight: 600; margin: 0; }
 
-.fragments { font-size: 1.3rem; font-weight: 700; margin: 0 0 0.6rem; min-height: 3.5rem; }
-.fragment { display: inline; }
-.fragment.new { animation: fade-in 0.6s ease; }
-.fragment.masked { color: var(--muted); opacity: 0.5; letter-spacing: 0.1em; }
-.hint-info { margin: 0; }
+.anecdote-text.big { font-size: 1.5rem; line-height: 1.35; animation: fade-in 0.6s ease; }
 
 .points-hint b { color: var(--accent); }
 

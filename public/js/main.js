@@ -17,6 +17,7 @@ import { renderScoreboard } from './scoreboard.js';
 import home from './screens/home.js';
 import lobby from './screens/lobby.js';
 import submit from './screens/submit.js';
+import debate from './screens/debate.js';
 import vote from './screens/vote.js';
 import reveal from './screens/reveal.js';
 import roundEnd from './screens/roundEnd.js';
@@ -25,7 +26,7 @@ import craziestReveal from './screens/craziestReveal.js';
 import end from './screens/end.js';
 
 // Nom de phase serveur -> écran
-const SCREENS = { home, lobby, submit, vote, reveal, roundEnd, craziestVote, craziestReveal, end };
+const SCREENS = { home, lobby, submit, debate, vote, reveal, roundEnd, craziestVote, craziestReveal, end };
 
 const root = document.getElementById('screen');
 const scoreboardEl = document.getElementById('scoreboard');

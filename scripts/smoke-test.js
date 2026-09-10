@@ -2,6 +2,7 @@
  * Test de bout en bout : 3 bots jouent une partie complète contre le serveur.
  *
  *   npm run smoke            (lance son propre serveur sur un port de test)
+ *   SMOKE_URL=https://jeu.samuel-josephmyrtil.fr npm run smoke   (teste un serveur déjà en ligne)
  *
  * Scénario : 2 manches + manche bonus. Au début de la manche 2, un bot se
  * déconnecte sans écrire : la partie doit continuer avec les 2 autres.
@@ -10,8 +11,9 @@ const { spawn } = require('child_process');
 const path = require('path');
 const { io } = require('socket.io-client');
 
+const REMOTE_URL = process.env.SMOKE_URL;
 const PORT = 3999;
-const URL = `http://127.0.0.1:${PORT}`;
+const URL = REMOTE_URL || `http://127.0.0.1:${PORT}`;
 const TIMEOUT_MS = 30_000;
 
 const log = (...args) => console.log('  ', ...args);
@@ -36,8 +38,8 @@ function makeBot(name) {
 }
 
 async function main() {
-  const server = startServer();
-  const proc = await server;
+  const proc = REMOTE_URL ? null : await startServer();
+  log(`serveur testé : ${URL}`);
   const timer = setTimeout(() => fail('délai dépassé'), TIMEOUT_MS);
 
   const [alice, bob, chloe] = ['Alice', 'Bob', 'Chloé'].map(makeBot);
@@ -63,7 +65,9 @@ async function main() {
   if (!denied.error) fail("un non-host ne devrait pas modifier les réglages");
   await alice.emit('room:updateSettings', { patch: { rounds: 2, voteTime: 999, hack: true } });
   const settings = alice.state.settings;
-  if (settings.voteTime !== 90 || settings.hack) fail(`réglages mal validés : ${JSON.stringify(settings)}`);
+  if (settings.voteTime !== alice.state.settingsSchema.voteTime.max || settings.hack) {
+    fail(`réglages mal validés : ${JSON.stringify(settings)}`);
+  }
   log('réglages validés côté serveur :', JSON.stringify(settings));
 
   // ---- Chaque bot réagit aux changements de phase
@@ -87,8 +91,18 @@ async function main() {
           }
           return bot.emit('game:action', { type: 'submit', payload: { text: `Anecdote de ${bot.name}, manche ${g.round}, plutôt folle` } });
 
+        case 'debate':
+          if (!g.text) fail("l'anecdote doit être affichée en entier pendant le débat");
+          if ('authorId' in g) fail("l'auteur ne doit pas être envoyé pendant le débat");
+          // Le host écourte le débat ; les votes envoyés avant doivent être refusés
+          if (bot === alice) {
+            const early = await bob.emit('game:action', { type: 'vote', payload: { targetId: alice.id } });
+            if (!early.error) fail('un vote pendant le débat aurait dû être refusé');
+            return bot.emit('game:action', { type: 'continue' });
+          }
+          return;
+
         case 'vote': {
-          if (g.fragments.length !== 1) fail('au début du vote, un seul fragment doit être visible');
           if ('authorId' in g) fail("l'auteur ne doit pas être envoyé pendant le vote");
           if (g.isAuthor) return;
           const target = s.players.find((p) => p.id !== bot.id);
@@ -141,7 +155,7 @@ async function main() {
 
   clearTimeout(timer);
   bots.forEach((b) => b.socket.disconnect());
-  proc.kill();
+  proc?.kill();
   console.log('\n✅ Partie complète jouée sans erreur.');
   process.exit(0);
 }

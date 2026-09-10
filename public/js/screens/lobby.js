@@ -10,7 +10,13 @@ const isHost = (s) => s.hostId === s.you;
 
 function formatValue(def, value) {
   if (def.type === 'boolean') return value ? 'Oui' : 'Non';
-  return `${value}${def.unit ?? ''}`;
+  const n = Number(value);
+  // Durées longues plus lisibles : 90 -> "1 min 30"
+  if (def.unit === 's' && n >= 60) {
+    const sec = n % 60;
+    return `${Math.floor(n / 60)} min${sec ? ` ${String(sec).padStart(2, '0')}` : ''}`;
+  }
+  return `${n}${def.unit ?? ''}`;
 }
 
 function settingHtml(key, def, host) {

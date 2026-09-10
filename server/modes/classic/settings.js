@@ -8,13 +8,14 @@ const SETTINGS_SCHEMA = {
     type: 'number', label: 'Temps pour écrire son anecdote', unit: 's',
     min: 30, max: 120, step: 5, default: 60,
   },
-  voteTime: {
-    type: 'number', label: 'Temps de vote par anecdote', unit: 's',
-    min: 30, max: 90, step: 5, default: 45,
+  debateTime: {
+    type: 'number', label: 'Temps de débat par anecdote', unit: 's',
+    help: "L'anecdote s'affiche en entier : discutez avant de voter",
+    min: 30, max: 300, step: 15, default: 90,
   },
-  hintInterval: {
-    type: 'number', label: 'Un nouvel indice toutes les', unit: 's',
-    min: 5, max: 20, step: 1, default: 8,
+  voteTime: {
+    type: 'number', label: 'Temps de vote après le débat', unit: 's',
+    min: 15, max: 60, step: 5, default: 30,
   },
   rounds: {
     type: 'number', label: 'Nombre de manches', unit: '',
@@ -37,7 +38,7 @@ const SETTINGS_SCHEMA = {
 const RULES = {
   ANECDOTE_MIN_LENGTH: 10,
   ANECDOTE_MAX_LENGTH: 280,
-  MAX_FRAGMENTS: 10,
+  CORRECT_GUESS_POINTS: 1,
   UNDETECTABLE_BONUS: 1,
   CRAZIEST_BONUS: 2,
   REVEAL_DURATION: 15,

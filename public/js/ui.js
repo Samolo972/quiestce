@@ -79,21 +79,22 @@ export function rankPlayers(players) {
  * Zone de bas d'écran pour les transitions : le host peut passer, les
  * autres voient le compte à rebours avant la suite automatique.
  */
-export function renderContinue(container, state, label = 'Continuer ▶') {
+export function renderContinue(container, state, label = 'Continuer ▶', waitLabel = 'Suite dans') {
   const isHost = state.hostId === state.you;
   const key = `${isHost}|${state.game.deadline}|${label}`;
   if (container.dataset.key === key) return; // évite de recréer le bouton à chaque mise à jour
   container.dataset.key = key;
 
+  const countdown = `${esc(waitLabel)} ${timerHtml(state.game.deadline, 'timer inline')}`;
   if (isHost) {
     container.innerHTML = `
       <button type="button" class="btn primary block">${esc(label)}</button>
-      <p class="muted small center">Suite automatique dans ${timerHtml(state.game.deadline, 'timer inline')}</p>`;
+      <p class="muted small center">${countdown}</p>`;
     container.querySelector('button').addEventListener('click', async (e) => {
       e.currentTarget.disabled = true;
       checkResponse(await action('continue'));
     });
   } else {
-    container.innerHTML = `<p class="muted center">Suite dans ${timerHtml(state.game.deadline, 'timer inline')}</p>`;
+    container.innerHTML = `<p class="muted center">${countdown}</p>`;
   }
 }

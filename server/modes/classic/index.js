@@ -1,9 +1,12 @@
 /**
  * Mode "Qui a dit ça ?" — machine à états d'une partie.
  *
- *   submit ──> vote ──> reveal ──> (vote suivant…) ──> roundEnd ──> submit (manche suivante)
- *                                                          │
- *                                                          └──> craziestVote ──> craziestReveal ──> end
+ *   submit ──> debate ──> vote ──> reveal ──> (anecdote suivante…) ──> roundEnd ──> submit (manche suivante)
+ *                                                                         │
+ *                                                                         └──> craziestVote ──> craziestReveal ──> end
+ *
+ * Pour chaque anecdote : elle s'affiche en entier et tout le monde en débat
+ * (debate), puis chacun vote (vote), puis on révèle l'auteur (reveal).
  *
  * Toutes les transitions passent par setPhase(), qui annule les timers de la
  * phase précédente. Chaque fonction de fin de phase vérifie d'abord qu'on est
@@ -12,8 +15,6 @@
  */
 const { randomUUID } = require('crypto');
 const { SETTINGS_SCHEMA, RULES } = require('./settings');
-const { fragmentCount, splitIntoFragments } = require('./fragments');
-const { pointsForCorrectGuess } = require('./scoring');
 const { shuffle } = require('../../utils/random');
 
 // ================================================================ Utilitaires
@@ -56,7 +57,7 @@ function start(room) {
     queue: [], // anecdotes restant à jouer dans la manche
     roundIndex: 0, // numéro de l'anecdote en cours dans la manche
     roundTotal: 0,
-    current: null, // anecdote en cours de vote / révélation
+    current: null, // anecdote en cours de débat / vote / révélation
     nextStep: null, // après roundEnd : 'round' | 'craziest' | 'end'
     craziest: null, // état de la manche bonus
   };
@@ -110,8 +111,9 @@ function endSubmit(room) {
   nextAnecdote(room);
 }
 
-// ==================================================== Vote + indices progressifs
+// ============================================================= Débat puis vote
 
+/** Affiche l'anecdote suivante en entier et ouvre le débat. */
 function nextAnecdote(room) {
   const game = room.game;
   if (room.players.size < 2) return endGame(room, 'Il ne reste plus assez de joueurs.');
@@ -119,44 +121,26 @@ function nextAnecdote(room) {
   const anecdote = game.queue.shift();
   if (!anecdote) return endRound(room);
 
-  const { voteTime, hintInterval } = room.settings;
-  const total = fragmentCount(voteTime, hintInterval, RULES.MAX_FRAGMENTS);
-
   game.roundIndex += 1;
   game.current = {
     anecdote,
-    fragments: splitIntoFragments(anecdote.text, total), // stockés côté serveur uniquement
-    revealed: 1, // nombre de fragments visibles
-    nextHintAt: null,
-    votes: new Map(), // voterId -> { targetId, visible }
+    votes: new Map(), // voterId -> targetId
     result: null,
   };
-
-  setPhase(room, 'vote', voteTime, () => endVote(room));
-  scheduleNextHint(room);
+  setPhase(room, 'debate', room.settings.debateTime, () => startVote(room));
   room.broadcast();
 }
 
-/** Programme la révélation du fragment suivant, jusqu'au texte complet. */
-function scheduleNextHint(room) {
-  const current = room.game.current;
-  if (current.revealed >= current.fragments.length) {
-    current.nextHintAt = null;
-    return;
-  }
-  const ms = room.settings.hintInterval * 1000;
-  current.nextHintAt = Date.now() + ms;
-  room.setTimer('hint', () => {
-    if (room.game?.phase !== 'vote' || room.game.current !== current) return;
-    current.revealed += 1;
-    scheduleNextHint(room);
-    room.broadcast();
-  }, ms);
+/** Fin du débat (timer ou host) : place au vote. */
+function startVote(room) {
+  if (room.game.phase !== 'debate') return;
+  setPhase(room, 'vote', room.settings.voteTime, () => endVote(room));
+  room.broadcast();
 }
 
 function castVote(room, playerId, payload) {
   const game = room.game;
-  if (game.phase !== 'vote') return 'Le vote est terminé.';
+  if (game.phase !== 'vote') return "Ce n'est pas le moment de voter.";
   const current = game.current;
   if (playerId === current.anecdote.authorId) return 'Tu ne peux pas voter sur ta propre anecdote 😉';
   if (current.votes.has(playerId)) return 'Tu as déjà voté.';
@@ -164,8 +148,7 @@ function castVote(room, playerId, payload) {
   const targetId = payload?.targetId;
   if (targetId === playerId || !room.getPlayer(targetId)) return 'Choix invalide.';
 
-  // On mémorise combien d'indices étaient visibles : c'est ce qui fixe les points
-  current.votes.set(playerId, { targetId, visible: current.revealed });
+  current.votes.set(playerId, targetId);
   checkVotesComplete(room);
 }
 
@@ -180,23 +163,21 @@ function endVote(room) {
   if (game.phase !== 'vote') return;
   const current = game.current;
   const authorId = current.anecdote.authorId;
-  const total = current.fragments.length;
 
   const votes = [];
-  for (const [voterId, vote] of current.votes) {
+  for (const [voterId, targetId] of current.votes) {
     const voter = room.getPlayer(voterId);
     if (!voter) continue;
-    const correct = vote.targetId === authorId;
-    const points = correct ? pointsForCorrectGuess(vote.visible, total) : 0;
+    const correct = targetId === authorId;
+    const points = correct ? RULES.CORRECT_GUESS_POINTS : 0;
     voter.score += points;
     votes.push({
       voterId,
       voterName: voter.name,
-      targetId: vote.targetId,
-      targetName: room.getPlayer(vote.targetId)?.name ?? '(parti)',
+      targetId,
+      targetName: room.getPlayer(targetId)?.name ?? '(parti)',
       correct,
       points,
-      visible: vote.visible,
     });
   }
 
@@ -208,7 +189,6 @@ function endVote(room) {
     room.getPlayer(authorId).score += authorBonus;
   }
 
-  current.revealed = total;
   current.result = { votes, undetectable, authorBonus };
   setPhase(room, 'reveal', RULES.REVEAL_DURATION, () => nextAnecdote(room));
   room.broadcast();
@@ -301,10 +281,11 @@ function endGame(room, reason) {
 
 // ======================================================= Actions des joueurs
 
-/** Le host peut écourter les écrans de transition. */
+/** Le host peut écourter le débat et les écrans de transition. */
 function hostContinue(room, playerId) {
   if (!room.isHost(playerId)) return 'Seul le host peut passer à la suite.';
   switch (room.game.phase) {
+    case 'debate': return startVote(room);
     case 'reveal': return nextAnecdote(room);
     case 'roundEnd': return leaveRoundEnd(room);
     case 'craziestReveal': return endGame(room);
@@ -345,13 +326,17 @@ function onPlayerLeave(room, playerId, player) {
       if (game.submissions.size >= room.players.size) return endSubmit(room);
       break;
 
+    case 'debate':
     case 'vote':
       if (game.current.anecdote.authorId === playerId) {
         room.toast(`L'auteur de cette anecdote (${player.name}) est parti : on passe à la suite !`);
         return nextAnecdote(room);
       }
-      game.current.votes.delete(playerId); // on retire son vote en attente
-      return checkVotesComplete(room); // il était peut-être le dernier attendu
+      if (game.phase === 'vote') {
+        game.current.votes.delete(playerId); // on retire son vote en attente
+        return checkVotesComplete(room); // il était peut-être le dernier attendu
+      }
+      break;
 
     case 'craziestVote': {
       const votes = game.craziest.votes;
@@ -373,7 +358,7 @@ function onPlayerLeave(room, playerId, player) {
 
 /**
  * Ce que voit un joueur. Ne jamais y mettre ce qui doit rester secret :
- * l'auteur pendant le vote, les fragments pas encore révélés, qui a voté quoi…
+ * l'auteur avant la révélation, qui a voté pour qui…
  */
 function getView(room, playerId) {
   const game = room.game;
@@ -395,18 +380,21 @@ function getView(room, playerId) {
         maxLength: RULES.ANECDOTE_MAX_LENGTH,
       };
 
+    case 'debate':
     case 'vote': {
       const current = game.current;
-      return {
+      const view = {
         ...base,
         index: game.roundIndex,
         count: game.roundTotal,
-        fragments: current.fragments.slice(0, current.revealed),
-        totalFragments: current.fragments.length,
-        nextHintAt: current.nextHintAt,
+        text: current.anecdote.text,
         isAuthor: current.anecdote.authorId === playerId,
-        myVote: current.votes.get(playerId)?.targetId ?? null,
-        potentialPoints: pointsForCorrectGuess(current.revealed, current.fragments.length),
+      };
+      if (game.phase === 'debate') return view;
+      return {
+        ...view,
+        myVote: current.votes.get(playerId) ?? null,
+        points: RULES.CORRECT_GUESS_POINTS,
         // Seulement un compteur : la liste de qui a voté trahirait l'auteur par élimination
         votedCount: current.votes.size,
         expected: eligibleVoters(room).length,
